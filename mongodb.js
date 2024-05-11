@@ -40,14 +40,20 @@ async function addToCartAndSaveToMongoDB(userId, productId, productName, product
         const database = client.db('Lotte');
         const cartCollection = database.collection('cart');
 
+        // Tạo một biến status cho trạng thái xử lý
+        const status = 'processing';
+
         // Tìm kiếm giỏ hàng của người dùng
         const existingCart = await cartCollection.findOne({ userId: userId });
 
         if (existingCart) {
-            // Nếu giỏ hàng đã tồn tại, chỉ cần thêm sản phẩm vào mảng items
+            // Nếu giỏ hàng đã tồn tại, chỉ cần thêm sản phẩm vào mảng items và cập nhật trạng thái
             const updatedCart = {
                 $push: {
                     items: { productId: productId, name: productName, price: productPrice }
+                },
+                $set: {
+                    status: status
                 }
             };
             await cartCollection.updateOne({ userId: userId }, updatedCart);
@@ -56,7 +62,8 @@ async function addToCartAndSaveToMongoDB(userId, productId, productName, product
             // Nếu giỏ hàng chưa tồn tại, tạo mới giỏ hàng và thêm sản phẩm vào
             const newCart = {
                 userId: userId,
-                items: [{ productId: productId, name: productName, price: productPrice }]
+                items: [{ productId: productId, name: productName, price: productPrice }],
+                status: status
             };
             await cartCollection.insertOne(newCart);
             console.log('Giỏ hàng mới đã được tạo và sản phẩm đã được thêm vào.');
@@ -67,6 +74,7 @@ async function addToCartAndSaveToMongoDB(userId, productId, productName, product
         await client.close();
     }
 }
+
 
 async function removeFromCartByProductId(userId, productId) {
     try {
@@ -87,6 +95,13 @@ async function removeFromCartByProductId(userId, productId) {
             console.log(`Không tìm thấy hoặc không có sản phẩm có ID ${intProductId} trong giỏ hàng của userId ${userId}`);
         } else {
             console.log(`Đã xóa sản phẩm có ID ${intProductId} khỏi giỏ hàng của userId ${userId}`);
+
+            // Kiểm tra nếu mảng items rỗng, xóa luôn userId
+            const cart = await cartCollection.findOne({ userId: userId });
+            if (cart && cart.items.length === 0) {
+                await cartCollection.deleteOne({ userId: userId });
+                console.log(`Giỏ hàng của userId ${userId} đã bị xóa vì không có sản phẩm nào.`);
+            }
         }
     } catch (error) {
         console.error('Đã xảy ra lỗi khi xóa sản phẩm khỏi giỏ hàng:', error);
@@ -94,6 +109,7 @@ async function removeFromCartByProductId(userId, productId) {
         await client.close();
     }
 }
+
 
 async function getUserCartItems(userId) {
     try {
@@ -114,43 +130,86 @@ async function getUserCartItems(userId) {
     }
 }
 
-// const userId = 'user123'; // Thay thế bằng userId thực tế
-// getUserCartItems(userId)
-//     .then(cartItems => {
-//         console.log('Thông tin giỏ hàng:', cartItems);
-//     })
-//     .catch(error => {
-//         console.error('Đã xảy ra lỗi:', error);
-//     });
-
-
-
-
-async function getUserAndProductInfo(userId) {
+async function getProductsByProcessingUsers() {
     try {
         await client.connect();
         const database = client.db('Lotte');
         const cartCollection = database.collection('cart');
 
-        // Lấy thông tin người dùng từ MongoDB
-        const user = await cartCollection.findOne({ userId: userId });
+        // Lấy danh sách các sản phẩm của các userId có Status là "processing"
+        const products = await cartCollection.find({ "status": "processing" }).toArray();
 
-        // Lấy thông tin tất cả các sản phẩm của người dùng từ MongoDB
-        const products = await cartCollection.find({ userId: userId }).toArray();
-
-        return { user, products };
+        console.log("Products of users with processing status:", products);
+        
+        return products;
     } catch (error) {
         console.error('Đã xảy ra lỗi khi lấy thông tin từ MongoDB:', error);
-        return null;
+        return [];
     } finally {
         await client.close();
     }
 }
+
+async function updateStatusToDone(userId) {
+    try {
+        await client.connect();
+        const database = client.db('Lotte');
+        const cartCollection = database.collection('cart');
+
+        // Truy vấn để cập nhật status thành "done" cho userId cụ thể
+        const result = await cartCollection.updateMany(
+            { userId: userId, status: "processing" }, // Điều kiện tìm kiếm
+            { $set: { status: "done" } } // Giá trị mới của status
+        );
+
+        console.log(`${result.modifiedCount} documents updated`);
+
+        return result.modifiedCount;
+    } catch (error) {
+        console.error('Đã xảy ra lỗi khi cập nhật status:', error);
+        return 0;
+    } finally {
+        await client.close();
+    }
+}
+
+async function addProduct(productName, productId, productPrice) {
+    try {
+        // Kết nối đến MongoDB
+        await client.connect();
+
+        // Chọn cơ sở dữ liệu và bảng sản phẩm
+        const database = client.db('Lotte'); // Thay 'your_database_name' bằng tên cơ sở dữ liệu thực tế
+        const productsCollection = database.collection('products'); // Thay 'products' bằng tên bảng sản phẩm thực tế
+
+        // Tạo một đối tượng sản phẩm mới
+        const newProduct = {
+            name: productName,
+            id: productId,
+            price: productPrice
+        };
+
+        // Thêm sản phẩm vào cơ sở dữ liệu
+        await productsCollection.insertOne(newProduct);
+
+        console.log(`Đã thêm sản phẩm có id: ${productId} thành công!`);
+    } catch (error) {
+        console.error('Lỗi khi thêm sản phẩm:', error);
+        return 'Đã xảy ra lỗi khi thêm sản phẩm.';
+    } finally {
+        // Đóng kết nối với MongoDB client
+        await client.close();
+    }
+}
+
 
 module.exports = {
     connectToMongoDB,
     closeMongoDBConnection,
     addToCartAndSaveToMongoDB,
     removeFromCartByProductId,
-    getUserCartItems
+    getUserCartItems,
+    getProductsByProcessingUsers,
+    updateStatusToDone,
+    addProduct
 }

@@ -37,6 +37,15 @@ app.get('/pay.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'pay.html'));
 });
 
+app.get('/staff.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'staff.html'));
+});
+
+app.get('/adminAdd.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'adminAdd.html'));
+});
+
+
 app.post('/add-to-cart', async (req, res) => {
     try {
         const { userId, productId, productName, productPrice } = req.body; // Nhận thông tin sản phẩm từ request body
@@ -78,6 +87,44 @@ app.get('/api/cart/:userId', async (req, res) => {
         res.json(cartItems);
     } catch (error) {
         res.status(500).json({ error: 'Lỗi khi truy xuất giỏ hàng' });
+    }
+});
+
+// Router để trả về thông tin các sản phẩm đang xử lý
+app.get('/api/processing-products', async (req, res) => {
+    try {
+        // Gọi hàm trong MongoDB để lấy thông tin các sản phẩm đang xử lý
+        const processingProducts = await mongodbModule.getProductsByProcessingUsers();
+        res.json(processingProducts);
+    } catch (error) {
+        // Trả về lỗi nếu có lỗi xảy ra
+        res.status(500).json({ error: 'Lỗi khi truy xuất sản phẩm đang xử lý' });
+    }
+});
+
+app.put('/confirm-order/:userId', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        // Gọi hàm trong MongoDB để cập nhật trạng thái của đơn hàng thành "done"
+        await mongodbModule.updateStatusToDone(userId);
+        res.status(200).send('Xác nhận đơn hàng thành công.');
+    } catch (error) {
+        res.status(500).json({ error: 'Lỗi khi xác nhận đơn hàng: ' + error.message });
+    }
+});
+
+app.post('/api/add-product', async (req, res) => {
+    try {
+        const { productName, productId, productPrice } = req.body; // Nhận thông tin sản phẩm từ request body
+
+        // Gọi hàm để thêm sản phẩm vào cơ sở dữ liệu MongoDB
+        await mongodbModule.addProduct(productName, productId, productPrice);
+
+        // Trả về thông báo thành công nhưng không cần thiết lập trạng thái phản hồi là 201 Created
+        res.send('Sản phẩm đã được thêm vào giỏ hàng');
+    } catch (error) {
+        console.error('Đã xảy ra lỗi khi thêm sản phẩm:', error);
+        res.status(500).send('Đã xảy ra lỗi khi thêm sản phẩm vào cơ sở dữ liệu.');
     }
 });
 
