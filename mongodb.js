@@ -81,27 +81,39 @@ async function removeFromCartByProductId(userId, productId) {
         await client.connect();
         const database = client.db('Lotte');
         const cartCollection = database.collection('cart');
-
+        
         // Chuyển đổi productId sang kiểu Int32
         const intProductId = parseInt(productId);
 
         // Tìm bản ghi chứa userId và có một hoặc nhiều sản phẩm có productId giống với productId được cung cấp
-        const result = await cartCollection.updateOne(
-            { userId: userId, "items.productId": intProductId },
-            { $pull: { items: { productId: intProductId } } }
-        );
+        const cart = await cartCollection.findOne({ userId: userId });
 
-        if (result.modifiedCount === 0) {
-            console.log(`Không tìm thấy hoặc không có sản phẩm có ID ${intProductId} trong giỏ hàng của userId ${userId}`);
-        } else {
-            console.log(`Đã xóa sản phẩm có ID ${intProductId} khỏi giỏ hàng của userId ${userId}`);
+        if (cart) {
+            // Tìm index của sản phẩm có productId cần xóa trong mảng items
+            const index = cart.items.findIndex(item => parseInt(item.productId) === intProductId);
+            
+            if (index !== -1) {
+                // Xóa sản phẩm khỏi mảng items
+                cart.items.splice(index, 1);
+                
+                // Cập nhật lại giỏ hàng trong cơ sở dữ liệu
+                await cartCollection.updateOne(
+                    { userId: userId },
+                    { $set: { items: cart.items } }
+                );
+                
+                console.log(`Đã xóa sản phẩm có ID ${intProductId} khỏi giỏ hàng của userId ${userId}`);
 
-            // Kiểm tra nếu mảng items rỗng, xóa luôn userId
-            const cart = await cartCollection.findOne({ userId: userId });
-            if (cart && cart.items.length === 0) {
-                await cartCollection.deleteOne({ userId: userId });
-                console.log(`Giỏ hàng của userId ${userId} đã bị xóa vì không có sản phẩm nào.`);
+                // Kiểm tra nếu mảng items rỗng, xóa luôn userId
+                if (cart.items.length === 0) {
+                    await cartCollection.deleteOne({ userId: userId });
+                    console.log(`Giỏ hàng của userId ${userId} đã bị xóa vì không có sản phẩm nào.`);
+                }
+            } else {
+                console.log(`Không tìm thấy hoặc không có sản phẩm có ID ${intProductId} trong giỏ hàng của userId ${userId}`);
             }
+        } else {
+            console.log(`Không tìm thấy giỏ hàng của userId ${userId}`);
         }
     } catch (error) {
         console.error('Đã xảy ra lỗi khi xóa sản phẩm khỏi giỏ hàng:', error);
@@ -109,6 +121,10 @@ async function removeFromCartByProductId(userId, productId) {
         await client.close();
     }
 }
+
+
+
+// removeFromCartByProductId('user123', '3')
 
 
 async function getUserCartItems(userId) {
@@ -184,9 +200,9 @@ async function addProduct(productName, productId, productPrice) {
 
         // Tạo một đối tượng sản phẩm mới
         const newProduct = {
-            name: productName,
-            id: productId,
-            price: productPrice
+            productName: productName,
+            productId: productId,
+            productPrice: productPrice
         };
 
         // Thêm sản phẩm vào cơ sở dữ liệu
@@ -203,6 +219,102 @@ async function addProduct(productName, productId, productPrice) {
 }
 
 
+async function findProductList() {
+    await client.connect();
+    const database = client.db('Lotte');
+    const productCollection = database.collection('products');
+    const documents = await productCollection.find().toArray();
+    return documents;
+}
+
+
+async function deleteProduct(productId) {
+    try {
+        await client.connect();
+        const database = client.db('Lotte');
+        const productCollection = database.collection('products');
+
+        const result = await productCollection.deleteOne({ productId: productId });
+        if (result.deletedCount === 1) {
+            console.log('Product deleted successfully.');
+            return true; // Trả về true nếu xóa thành công
+        } else {
+            console.log('Product not found.');
+            return false; // Trả về false nếu sản phẩm không tồn tại trong cơ sở dữ liệu
+        }
+    } catch (error) {
+        console.error('Error deleting product:', error);
+        return false; // Trả về false nếu có lỗi xảy ra trong quá trình xóa sản phẩm
+    } finally {
+        await client.close();
+    }
+}
+
+async function updateProduct(productId, updatedProductName, updatedProductPrice) {
+    try {
+        await client.connect();
+        const database = client.db('Lotte');
+        const productCollection = database.collection('products');
+
+        // Tạo điều kiện tìm kiếm dựa trên productId
+        const filter = { productId: productId };
+
+        // Tạo dữ liệu mới cần cập nhật
+        const updateDoc = {
+            $set: {
+                productName: updatedProductName,
+                productPrice: updatedProductPrice
+            }
+        };
+
+        // Thực hiện cập nhật và lấy kết quả
+        const result = await productCollection.updateOne(filter, updateDoc);
+
+        // Kiểm tra xem có sản phẩm nào được cập nhật không
+        if (result.modifiedCount === 1) {
+            console.log('Product updated successfully.');
+            return true; // Trả về true nếu cập nhật thành công
+        } else {
+            console.log('Product not found or no changes were made.');
+            return false; // Trả về false nếu không tìm thấy sản phẩm hoặc không có thay đổi nào được thực hiện
+        }
+    } catch (error) {
+        console.error('Error updating product:', error);
+        return false; // Trả về false nếu có lỗi xảy ra trong quá trình cập nhật sản phẩm
+    } finally {
+        await client.close();
+    }
+}
+
+async function getProductById(productId) {
+    try {
+        // Kết nối đến MongoDB
+        await client.connect();
+
+        // Chọn cơ sở dữ liệu và bảng sản phẩm
+        const database = client.db('Lotte'); // Thay 'your_database_name' bằng tên cơ sở dữ liệu thực tế
+        const productsCollection = database.collection('products'); // Thay 'products' bằng tên bảng sản phẩm thực tế
+
+        // Tìm sản phẩm theo productId
+        const product = await productsCollection.findOne({ productId: productId });
+
+        if (product) {
+            return product;
+        } else {
+            console.log(`Không tìm thấy sản phẩm có ID: ${productId}`);
+            return null;
+        }
+    } catch (error) {
+        console.error('Lỗi khi lấy thông tin sản phẩm:', error);
+        return null;
+    } finally {
+        // Đóng kết nối với MongoDB client
+        await client.close();
+    }
+}
+
+
+
 module.exports = {
     connectToMongoDB,
     closeMongoDBConnection,
@@ -211,5 +323,9 @@ module.exports = {
     getUserCartItems,
     getProductsByProcessingUsers,
     updateStatusToDone,
-    addProduct
+    addProduct,
+    findProductList,
+    deleteProduct,
+    updateProduct,
+    getProductById
 }

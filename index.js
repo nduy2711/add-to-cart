@@ -5,6 +5,7 @@ const path = require('path')
 const bodyParser = require('body-parser');
 
 const mongodbModule = require("./mongodb")
+const productModule = require("./prouducts")
 
 mongodbModule.connectToMongoDB()
     .then(() => {
@@ -44,6 +45,11 @@ app.get('/staff.html', (req, res) => {
 app.get('/adminAdd.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'adminAdd.html'));
 });
+
+app.get('/adminUpdate.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'adminUpdate.html'));
+});
+
 
 
 app.post('/add-to-cart', async (req, res) => {
@@ -128,4 +134,92 @@ app.post('/api/add-product', async (req, res) => {
     }
 });
 
+app.get('/product', async (req, res) => {
+    try {
+        const products = await mongodbModule.findProductList();
+        const html = productModule.output(products);
+        res.send(html)
+    } catch (err) {
+        console.error('Failed to fetch documents', err);
+        res.status(500).send('Failed to fetch documents');
+    }
+})
 
+// Router để xóa sản phẩm từ cơ sở dữ liệu MongoDB
+app.delete('/api/delete-product/:productId', async (req, res) => {
+    const productId = req.params.productId;
+
+    try {
+        // Gọi hàm trong MongoDB để xóa sản phẩm dựa trên productId
+        const result = await mongodbModule.deleteProduct(productId);
+
+        // Kiểm tra kết quả trả về từ hàm deleteProduct
+        if (result) {
+            // Trả về phản hồi thành công nếu sản phẩm được xóa thành công
+            res.status(200).send('Sản phẩm đã được xóa thành công.');
+        } else {
+            // Trả về phản hồi 404 Not Found nếu sản phẩm không tồn tại trong cơ sở dữ liệu
+            res.status(404).send('Sản phẩm không tồn tại.');
+        }
+    } catch (error) {
+        // Trả về phản hồi lỗi nếu có lỗi xảy ra trong quá trình xóa sản phẩm
+        res.status(500).send('Lỗi khi xóa sản phẩm: ' + error.message);
+    }
+});
+
+app.put('/api/update-product/:productId', async (req, res) => {
+    const productId = req.params.productId;
+
+    try {
+        const { productName, productPrice } = req.body; // Nhận thông tin sản phẩm mới từ request body
+
+        // Gọi hàm trong MongoDB để cập nhật thông tin sản phẩm
+        const result = await mongodbModule.updateProduct(productId, productName, productPrice);
+
+        // Kiểm tra kết quả trả về từ hàm updateProduct
+        if (result) {
+            // Trả về phản hồi thành công nếu sản phẩm được cập nhật thành công
+            res.status(200).send('Thông tin sản phẩm đã được cập nhật thành công.');
+        } else {
+            // Trả về phản hồi 404 Not Found nếu sản phẩm không tồn tại trong cơ sở dữ liệu
+            res.status(404).send('Sản phẩm không tồn tại.');
+        }
+    } catch (error) {
+        // Trả về phản hồi lỗi nếu có lỗi xảy ra trong quá trình cập nhật thông tin sản phẩm
+        res.status(500).send('Lỗi khi cập nhật thông tin sản phẩm: ' + error.message);
+    }
+});
+
+// Router để lấy thông tin sản phẩm từ cơ sở dữ liệu MongoDB
+app.get('/api/get-product/:productId', async (req, res) => {
+    const productId = req.params.productId;
+    console.log(productId);
+
+    try {
+        // Gọi hàm trong MongoDB để lấy thông tin sản phẩm dựa trên productId
+        const product = await mongodbModule.getProductById(productId);
+
+        // Kiểm tra xem sản phẩm có tồn tại không
+        if (product) {
+            // Trả về sản phẩm nếu tìm thấy
+            res.status(200).json(product);
+        } else {
+            // Trả về phản hồi 404 Not Found nếu không tìm thấy sản phẩm
+            res.status(404).send('Sản phẩm không tồn tại.');
+        }
+    } catch (error) {
+        // Trả về phản hồi lỗi nếu có lỗi xảy ra trong quá trình lấy thông tin sản phẩm
+        res.status(500).send('Lỗi khi lấy thông tin sản phẩm: ' + error.message);
+    }
+});
+
+app.get('/api/products', async (req, res) => {
+    try {
+        // Gọi hàm trong MongoDB để lấy danh sách các sản phẩm
+        const products = await mongodbModule.findProductList();
+        res.json(products); // Trả về danh sách sản phẩm dưới dạng JSON
+    } catch (error) {
+        // Trả về lỗi nếu có lỗi xảy ra trong quá trình lấy danh sách sản phẩm
+        res.status(500).json({ error: 'Lỗi khi lấy thông tin sản phẩm: ' + error.message });
+    }
+});

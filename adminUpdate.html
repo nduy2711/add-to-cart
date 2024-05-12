@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Update</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+
+        label {
+            font-weight: bold;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+
+        input[type="text"][readonly] {
+            background-color: #f4f4f4;
+            color: #333;
+            cursor: not-allowed;
+        }
+
+        input[type="submit"] {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        input[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>Update Product</h2>
+        <form id="updateForm">
+            <label for="productId">Product ID:</label><br>
+            <input type="text" id="productId" name="productId" readonly><br>
+            <label for="productName">Product Name:</label><br>
+            <input type="text" id="productName" name="productName" required><br>
+            <label for="productPrice">Product Price:</label><br>
+            <input type="text" id="productPrice" name="productPrice" required><br><br>
+            <input type="submit" value="Update" onclick="updateProduct()">
+        </form>
+    </div>
+    <script>
+        async function updateProduct() {
+            const productId = document.getElementById('productId').value;
+            const productName = document.getElementById('productName').value;
+            const productPrice = document.getElementById('productPrice').value;
+
+            try {
+                // Gọi fetch để cập nhật thông tin sản phẩm vào MongoDB khi nút được click
+                const response = await fetch(`/api/update-product/${productId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        productName: productName,
+                        productPrice: productPrice
+                    })
+                });
+
+                // Kiểm tra phản hồi từ server
+                if (response.ok) {
+                    alert('Thông tin sản phẩm đã được cập nhật thành công.');
+                } else {
+                    console.error('Đã xảy ra lỗi:', response.status);
+                    alert('Đã xảy ra lỗi khi cập nhật thông tin sản phẩm.');
+                }
+            } catch (error) {
+                console.error('Đã xảy ra lỗi:', error);
+                alert('Đã xảy ra lỗi khi cập nhật thông tin sản phẩm.');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async function () {
+            const urlParams = new URLSearchParams(window.location.search);
+            const productId = urlParams.get('productId');
+            document.getElementById('productId').value = productId;
+
+            try {
+                // Gọi fetch để lấy thông tin sản phẩm từ MongoDB khi trang được load
+                const response = await fetch(`/api/get-product/${productId}`);
+                const product = await response.json();
+
+                // Đặt giá trị của productName và productPrice từ phản hồi
+                document.getElementById('productName').value = product.productName;
+                document.getElementById('productPrice').value = product.productPrice;
+            } catch (error) {
+                console.error('Đã xảy ra lỗi:', error);
+            }
+        });
+    </script>
+</body>
+
+</html>
